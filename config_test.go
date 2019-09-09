@@ -3,6 +3,7 @@ package usocksd
 import (
 	"net"
 	"testing"
+	"time"
 )
 
 func TestEmptyConfig(t *testing.T) {
@@ -24,6 +25,7 @@ func TestConfig(t *testing.T) {
 	t.Parallel()
 
 	c := NewConfig()
+	now := time.Now()
 	if err := c.Load("test/test1.toml"); err != nil {
 		t.Fatal(err)
 	}
@@ -51,16 +53,16 @@ func TestConfig(t *testing.T) {
 			t.Error("12.34.56.78 shout not be allowed")
 		}
 	}
-	if !c.allowFQDN("www.amazon.com") {
+	if !c.allowFQDN("www.amazon.com", now) {
 		t.Error("www.amazon.com should be allowed")
 	}
-	if !c.allowFQDN("www.google.com") {
+	if !c.allowFQDN("www.google.com", now) {
 		t.Error("www.google.com should be allowed")
 	}
-	if c.allowFQDN("bad.google.com") {
+	if c.allowFQDN("bad.google.com", now) {
 		t.Error("bad.amazon.com should be denied")
 	}
-	if c.allowFQDN("www.2ch.net") {
+	if c.allowFQDN("www.2ch.net", now) {
 		t.Error("www.2ch.net should be denied")
 	}
 	if c.allowPort(25) {
@@ -93,5 +95,38 @@ func TestConfigFail(t *testing.T) {
 	c = NewConfig()
 	if err := c.Load("test/test3.toml"); err == nil {
 		t.Error("loadConfig should fail for test3.toml")
+	}
+}
+
+func TestTimedDenySites(t *testing.T) {
+	t.Parallel()
+
+	c := NewConfig()
+	c.Outgoing.TimedDenySites = []TimedDenySite{
+		TimedDenySite{
+			Begin:     time.Date(1, 1, 1, 12, 23, 34, 0, time.UTC),
+			End:       time.Date(1, 1, 1, 13, 35, 57, 0, time.UTC),
+			DenySites: []string{"example.com"},
+		},
+	}
+
+	if !c.allowFQDN("example.com", time.Date(2000, 8, 23, 12, 23, 33, 0, time.UTC)) {
+		t.Error("example.com on 2000-08-23 12:23:33 should be allowed")
+	}
+
+	if c.allowFQDN("example.com", time.Date(2000, 8, 23, 12, 23, 34, 0, time.UTC)) {
+		t.Error("example.com on 2000-08-23 12:23:34 should be denied")
+	}
+
+	if c.allowFQDN("example.com", time.Date(2000, 8, 23, 13, 00, 00, 0, time.UTC)) {
+		t.Error("example.com on 2000-08-23 13:00:00 should be denied")
+	}
+
+	if c.allowFQDN("example.com", time.Date(2000, 8, 23, 13, 35, 57, 0, time.UTC)) {
+		t.Error("example.com on 2000-08-23 13:35:57 should be denied")
+	}
+
+	if !c.allowFQDN("example.com", time.Date(2000, 8, 23, 13, 35, 58, 0, time.UTC)) {
+		t.Error("example.com on 2000-08-23 13:35:58 should be allowed")
 	}
 }

@@ -2,6 +2,7 @@ package usocksd
 
 import (
 	"net"
+	"time"
 
 	"github.com/cybozu-go/log"
 	"github.com/cybozu-go/usocksd/socks"
@@ -15,7 +16,7 @@ func (ru ruleSet) Match(r *socks.Request) bool {
 	clientAddr := r.Conn.RemoteAddr()
 	tca, ok := clientAddr.(*net.TCPAddr)
 
-	if !ru.allowFQDN(r.Hostname) {
+	if !ru.allowFQDN(r.Hostname, time.Now()) {
 		log.Warn("denied access", map[string]interface{}{
 			"client_addr": clientAddr.String(),
 			"fqdn":        r.Hostname,

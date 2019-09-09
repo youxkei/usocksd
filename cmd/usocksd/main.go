@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/cybozu-go/log"
-	"github.com/cybozu-go/usocksd"
 	"github.com/cybozu-go/well"
+	"github.com/youxkei/usocksd"
 )
 
 const (

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/cybozu-go/well"
@@ -21,13 +22,20 @@ type IncomingConfig struct {
 	allowSubnets []*net.IPNet
 }
 
+type TimedDenySite struct {
+	Begin     time.Time
+	End       time.Time
+	DenySites []string `toml:"deny_sites"`
+}
+
 // OutgoingConfig is a set of configurations to connect to destinations.
 type OutgoingConfig struct {
-	AllowSites  []string `toml:"allow_sites"`
-	DenySites   []string `toml:"deny_sites"`
-	DenyPorts   []int    `toml:"deny_ports"`
-	Addresses   []net.IP
-	DNSBLDomain string `toml:"dnsbl_domain"`
+	AllowSites     []string        `toml:"allow_sites"`
+	DenySites      []string        `toml:"deny_sites"`
+	TimedDenySites []TimedDenySite `toml:"timed_deny_sites"`
+	DenyPorts      []int           `toml:"deny_ports"`
+	Addresses      []net.IP
+	DNSBLDomain    string `toml:"dnsbl_domain"`
 }
 
 // Config is a struct tagged for TOML for usocksd.
@@ -103,7 +111,7 @@ func siteMatch(site, match string) bool {
 }
 
 // allowFQDN tests if FQDN is granted to access or not.
-func (c *Config) allowFQDN(fqdn string) bool {
+func (c *Config) allowFQDN(fqdn string, now time.Time) bool {
 	fqdn = strings.ToLower(fqdn)
 	if len(c.Outgoing.AllowSites) > 0 {
 		for _, match := range c.Outgoing.AllowSites {
@@ -120,6 +128,20 @@ CHECK_DENY:
 			return false
 		}
 	}
+
+	for _, timedDenySites := range c.Outgoing.TimedDenySites {
+		begin := time.Date(now.Year(), now.Month(), now.Day(), timedDenySites.Begin.Hour(), timedDenySites.Begin.Minute(), timedDenySites.Begin.Second(), timedDenySites.Begin.Nanosecond(), timedDenySites.Begin.Location())
+		end := time.Date(now.Year(), now.Month(), now.Day(), timedDenySites.End.Hour(), timedDenySites.End.Minute(), timedDenySites.End.Second(), timedDenySites.End.Nanosecond(), timedDenySites.End.Location())
+
+		if (begin == now || begin.Before(now)) && (end == now || end.After(now)) {
+			for _, match := range timedDenySites.DenySites {
+				if siteMatch(fqdn, match) {
+					return false
+				}
+			}
+		}
+	}
+
 	return true
 }
 
